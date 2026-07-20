@@ -1,0 +1,37 @@
+# 런타임(IAST / Runtime SCA) 전용 의존성
+#
+# 왜 requirements.txt 와 따로 있나
+# --------------------------------
+# requirements.txt 는 "정적 SCA 시연용" 이라 2017~2019년 버전으로 고정되어 있고,
+# 그 조합은 최신 Python 에서 **실행되지 않습니다**.
+#   예) Jinja2 2.10 은 markupsafe 의 soft_unicode 를 import 하는데
+#       해당 심볼은 markupsafe 2.1 에서 제거됨 → Flask import 자체가 실패
+#
+# 런타임 데모는 앱이 실제로 떠야 하므로, "최신 Python 에서 동작하면서도
+# 여전히 알려진 CVE 를 보유한" 버전 조합을 따로 선정했습니다.
+#
+# 검증 방법 (2026-07-20)
+#   1) python3.12 venv 에 실제 설치 + 전체 import 성공 확인
+#   2) 각 버전을 https://osv.dev API 로 조회해 CVE 보유 확인
+#   → 8/9 패키지가 CVE 보유, 총 54건. Runtime SCA 시연에 충분합니다.
+
+Flask==2.2.2             # CVE-2023-30861 (HIGH, 세션 쿠키 캐시 노출)
+Jinja2==3.1.2            # CVE-2024-22195, CVE-2024-56326, CVE-2025-27516 (샌드박스 탈출)
+Werkzeug==2.2.2          # CVE-2023-25577, CVE-2023-46136, CVE-2024-34069 (HIGH)
+requests==2.31.0         # CVE-2024-35195, CVE-2024-47081 (자격증명 유출)
+urllib3==1.26.5          # CVE-2023-43804, CVE-2023-45803, CVE-2024-37891 (HIGH)
+cryptography==41.0.0     # CVE-2023-38325, CVE-2023-50782, CVE-2024-26130 (HIGH)
+Pillow==9.5.0            # CVE-2023-50447 (CRITICAL), CVE-2023-4863 (CRITICAL)
+paramiko==2.11.0         # CVE-2023-48795 (Terrapin SSH 공격)
+
+# CVE 는 없으나 app/utils.py 의 yaml.load 데모에 필요
+PyYAML==6.0.1
+
+# Datadog 트레이서 — IAST / Runtime SCA
+# Python IAST 최소 버전은 3.18.0 이며 현재 Preview 상태입니다.
+ddtrace>=3.18.0
+
+# 런타임 데모는 개발 서버 대신 gunicorn 을 사용합니다.
+# main.py 의 app.run(debug=True) 는 __main__ 블록 안에만 있으므로
+# gunicorn 으로 띄우면 실행되지 않습니다 (SAST finding 은 그대로 유지됨).
+gunicorn==21.2.0

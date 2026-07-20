@@ -1,0 +1,119 @@
+# GSEPS 설비 점검 API — EKS 배포 매니페스트 (Runtime Code Analysis / Runtime SCA 시연용)
+#
+# 전제
+#   · Datadog Agent 가 Helm 으로 설치되어 있고 DD_SITE=us3.datadoghq.com 이어야 합니다
+#   · clusterAgent.admissionController.enabled=true (values 파일에 이미 설정됨)
+#   · datadog.apm.portEnabled=true + DD_APM_NON_LOCAL_TRAFFIC=true (Runtime SCA 전제조건)
+#
+# ⚠️ IMAGE 를 실제 레지스트리 경로로 바꿔야 합니다 (아래 __IMAGE__ 자리)
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gseps-demo
+  labels:
+    # Datadog Admission Controller 가 이 네임스페이스의 파드에 설정을 주입하도록 허용
+    admission.datadoghq.com/enabled: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gseps-inspection-api
+  namespace: gseps-demo
+  labels:
+    app: gseps-inspection-api
+    tags.datadoghq.com/env: codesec-demo
+    tags.datadoghq.com/service: gseps-inspection-api
+    tags.datadoghq.com/version: "1.0.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gseps-inspection-api
+  template:
+    metadata:
+      labels:
+        app: gseps-inspection-api
+        # Unified Service Tagging — finding 을 서비스에 연결하는 기준
+        tags.datadoghq.com/env: codesec-demo
+        tags.datadoghq.com/service: gseps-inspection-api
+        tags.datadoghq.com/version: "1.0.0"
+        # Admission Controller 가 DD_AGENT_HOST 등을 자동 주입하도록 활성화
+        admission.datadoghq.com/enabled: "true"
+    spec:
+      containers:
+        - name: api
+          image: __IMAGE__
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            # --- Unified Service Tagging ---
+            - name: DD_ENV
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/env']
+            - name: DD_SERVICE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/service']
+            - name: DD_VERSION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['tags.datadoghq.com/version']
+
+            # --- Agent 접속 ---
+            # Admission Controller 가 주입하지만, 실패 시를 대비해 명시합니다.
+            # hostPort 방식(values 파일의 apm.useHostPort: true)이므로 노드 IP 로 접속합니다.
+            - name: DD_AGENT_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: DD_TRACE_AGENT_PORT
+              value: "8126"
+
+            # --- Runtime Code Analysis (IAST) ---
+            # Python IAST 는 ddtrace >= 3.18.0 필요, 현재 Preview 상태입니다.
+            - name: DD_IAST_ENABLED
+              value: "true"
+
+            # --- Runtime SCA ---
+            # 이름이 appsec 네임스페이스지만 AAP 라이선스와는 무관한 레거시 네이밍입니다.
+            - name: DD_APPSEC_SCA_ENABLED
+              value: "true"
+
+            - name: DD_TRACE_ENABLED
+              value: "true"
+            - name: DD_LOGS_INJECTION
+              value: "true"
+
+          readinessProbe:
+            httpGet:
+              path: /api/equipment
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gseps-inspection-api
+  namespace: gseps-demo
+  labels:
+    app: gseps-inspection-api
+spec:
+  type: ClusterIP
+  selector:
+    app: gseps-inspection-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

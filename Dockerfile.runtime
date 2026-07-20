@@ -1,28 +1,33 @@
-# 런타임(IAST) 시연 전용 이미지.
+# 런타임(IAST / Runtime SCA) 시연 전용 이미지.
 #
 # 저장소 루트의 Dockerfile 은 IaC 룰 탐지를 위해 의도적으로 취약하게 작성된
 # "전시용" 파일이므로 실제 구동에는 사용하지 않습니다. 이 파일이 실제 빌드용입니다.
+#
+# 의존성은 requirements.txt(정적 스캔용, 구버전 고정) 가 아니라
+# requirements-runtime.txt 를 씁니다. 이유는 해당 파일 주석 참조.
 
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY requirements-runtime.txt .
 
-# 데모용 취약 의존성 + Datadog 트레이서
-#
-# ⚠️ Python IAST(Code-Level Vulnerability detection)는 ddtrace 3.18.0 이상 필요.
-#    또한 Python IAST 는 현재 Preview 상태입니다.
-#    Runtime SCA 는 ddtrace 1.5.0 이상이면 동작합니다.
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir 'ddtrace>=3.18.0'
+RUN pip install --no-cache-dir -r requirements-runtime.txt
 
 COPY app/ /app/
 
-RUN useradd --create-home --shell /bin/bash gseps
+# DB_PATH(/var/lib/gseps/equipment.db) 를 비root 사용자가 쓸 수 있도록 준비
+RUN useradd --create-home --shell /bin/bash gseps \
+    && mkdir -p /var/lib/gseps \
+    && chown -R gseps:gseps /var/lib/gseps /app
+
 USER gseps
 
 EXPOSE 8080
 
-# ddtrace-run 으로 자동 계측 — IAST 는 DD_IAST_ENABLED=true 일 때 활성화
-CMD ["ddtrace-run", "python", "main.py"]
+# 1) DB 초기화 — IAST 는 SQL 이 실제로 실행되어야 taint 를 탐지합니다
+# 2) ddtrace-run + gunicorn 으로 기동
+#
+# main.py 의 app.run(host="0.0.0.0", debug=True) 는 __main__ 블록 안에만 있어
+# gunicorn 경로에서는 실행되지 않습니다. SAST finding 은 그대로 남습니다.
+CMD ["sh", "-c", "python db_init.py && exec ddtrace-run gunicorn -b 0.0.0.0:8080 -w 2 --access-logfile - main:app"]
