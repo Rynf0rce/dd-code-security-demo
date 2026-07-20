@@ -36,9 +36,14 @@
 ├── docker-compose.yml          # Agent + 계측된 앱 (IAST / Runtime SCA)
 ├── requirements.txt            # SCA 대상 lockfile (CVE 보유 버전 고정)
 ├── code-security.datadog.yaml  # Repository 레벨 SAST 설정 (현행 스키마)
-└── .github/workflows/
-    └── datadog-code-security.yml   # CI 스캔 경로 (대안/설명용)
+└── ci-examples/
+    ├── datadog-code-security.yml   # CI 스캔 경로 (대안/설명용, 기본 비활성)
+    └── README.md                   # 실제 활성화 방법
 ```
+
+> **주 경로는 Datadog-hosted scanning 입니다.** CI 워크플로우는 "소스코드 반출 불가"
+> 요건에 대한 대안을 설명하기 위한 참고 자산이라 `.github/workflows/` 가 아닌
+> `ci-examples/` 에 비활성 상태로 두었습니다. 활성화 방법은 해당 디렉토리의 README 참조.
 
 > **파일명 주의**: 구 스키마 `static-analysis.datadog.yml` 은 deprecated 입니다.
 > 두 파일이 모두 존재하면 `code-security.datadog.yaml` 이 우선합니다.
