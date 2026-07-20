@@ -1,0 +1,17 @@
+# GSEPS 설비 점검 API — 의존성
+#
+# 주의: Datadog SCA(Software Composition Analysis) 탐지 시연을 위해
+#       알려진 CVE가 존재하는 구버전으로 의도적으로 고정되어 있습니다.
+#       실제 운영 환경에 사용하지 마십시오.
+#
+# 각 버전의 취약점은 https://osv.dev 에서 검증되었습니다 (2026-07-20 기준).
+
+Flask==0.12.2            # CVE-2018-1000656 (DoS), CVE-2019-1010083
+Jinja2==2.10             # CVE-2019-10906 (sandbox escape), CVE-2024-22195 (XSS)
+Werkzeug==0.15.2         # CVE-2019-14806, CVE-2023-25577, CVE-2024-34069 (HIGH)
+PyYAML==5.1              # CVE-2020-14343 (CRITICAL, 임의 코드 실행), CVE-2020-1747
+requests==2.19.1         # CVE-2018-18074 (Authorization 헤더 유출)
+urllib3==1.24.1          # CVE-2019-11236 (CRLF injection), CVE-2019-11324
+cryptography==2.3        # CVE-2023-0286 (X.400 타입 혼동), CVE-2020-25659
+paramiko==2.4.1          # CVE-2018-1000805 (인증 우회)
+Pillow==8.1.0            # CVE-2021-25287/25288 (CRITICAL, out-of-bounds read)

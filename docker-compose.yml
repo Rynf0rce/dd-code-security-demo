@@ -1,0 +1,58 @@
+# Datadog Code Security — Runtime(IAST / Runtime SCA) 시연 환경
+#
+# 사용법:
+#   export DD_API_KEY=<DPN org API key>
+#   docker compose up --build
+#   curl "http://localhost:8080/api/equipment?plant=A1'%20OR%20'1'='1"
+#   → Datadog > Security > Code Security > Vulnerabilities > Runtime Code Vulnerabilities
+
+services:
+  datadog-agent:
+    image: gcr.io/datadoghq/agent:7
+    container_name: dd-agent-codesec-demo
+    environment:
+      DD_API_KEY: ${DD_API_KEY:?DD_API_KEY 환경변수를 설정하세요}
+      DD_SITE: us3.datadoghq.com
+      DD_HOSTNAME: gseps-codesec-demo
+      # APM 활성화 — IAST/Runtime SCA는 트레이서가 Agent로 보고합니다
+      DD_APM_ENABLED: "true"
+      DD_APM_NON_LOCAL_TRAFFIC: "true"
+      DD_APM_RECEIVER_PORT: "8126"
+      # DD_APPSEC_ENABLED 는 의도적으로 켜지 않았습니다.
+      # IAST / Runtime SCA 는 AAP(App & API Protection) 라이선스에 종속되지 않는
+      # 독립 SKU 이며, 불필요하게 AAP 를 켜면 별도 과금 대상이 됩니다.
+      DD_LOGS_ENABLED: "true"
+      DD_TAGS: "env:codesec-demo customer:gseps"
+    ports:
+      - "8126:8126"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.runtime
+    container_name: gseps-api-codesec-demo
+    depends_on:
+      - datadog-agent
+    environment:
+      DD_AGENT_HOST: datadog-agent
+      DD_TRACE_AGENT_PORT: "8126"
+      DD_SERVICE: gseps-inspection-api
+      DD_ENV: codesec-demo
+      DD_VERSION: "1.0.0"
+      # --- Runtime Code Analysis (IAST) ---
+      # Python IAST 는 ddtrace >= 3.18.0 필요, 현재 Preview 상태
+      DD_IAST_ENABLED: "true"
+      # --- Runtime SCA (Software Composition Analysis) ---
+      # 전제조건: Datadog Agent + APM 구성 + type:web 트레이스 수신 (IAST 와 달리 APM 필수)
+      DD_APPSEC_SCA_ENABLED: "true"
+      DD_TRACE_ENABLED: "true"
+      DD_LOGS_INJECTION: "true"
+      # 참고: DD_IAST_REQUEST_SAMPLING / DD_IAST_DETECTION_MODE 는 공개 문서에서
+      #       확인되지 않아 의도적으로 넣지 않았습니다. 기본 샘플링으로 탐지가 안 되면
+      #       요청을 여러 번 반복하십시오.
+    ports:
+      - "8080:8080"

@@ -1,0 +1,28 @@
+# 런타임(IAST) 시연 전용 이미지.
+#
+# 저장소 루트의 Dockerfile 은 IaC 룰 탐지를 위해 의도적으로 취약하게 작성된
+# "전시용" 파일이므로 실제 구동에는 사용하지 않습니다. 이 파일이 실제 빌드용입니다.
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+
+# 데모용 취약 의존성 + Datadog 트레이서
+#
+# ⚠️ Python IAST(Code-Level Vulnerability detection)는 ddtrace 3.18.0 이상 필요.
+#    또한 Python IAST 는 현재 Preview 상태입니다.
+#    Runtime SCA 는 ddtrace 1.5.0 이상이면 동작합니다.
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir 'ddtrace>=3.18.0'
+
+COPY app/ /app/
+
+RUN useradd --create-home --shell /bin/bash gseps
+USER gseps
+
+EXPOSE 8080
+
+# ddtrace-run 으로 자동 계측 — IAST 는 DD_IAST_ENABLED=true 일 때 활성화
+CMD ["ddtrace-run", "python", "main.py"]

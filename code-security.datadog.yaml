@@ -1,0 +1,65 @@
+# Datadog Code Security — 리포지토리 레벨 설정
+#
+# ⚠️ 파일명 주의: 구 스키마 `static-analysis.datadog.yml` 은 deprecated 입니다.
+#    ("This schema is deprecated and does not receive new updates")
+#    두 파일이 모두 있으면 `code-security.datadog.yaml` 이 우선합니다.
+#
+# schema-version:
+#   v1.0 = SAST 전용   ← 본 데모에서 사용
+#   v1.1 = SAST + SCA
+#   v1.2 = SAST + SCA + IaC
+#
+# 설정 우선순위 (아래로 갈수록 강함):
+#   1) Organization 레벨  (Datadog UI)
+#   2) Repository 레벨    (Datadog UI)
+#   3) Repository 레벨    (이 파일)  ← 최우선
+
+schema-version: v1.0
+
+sast:
+  # 기본 ruleset 자동 적용을 끄고 명시적으로 지정 — 데모 결과 개수를 결정적으로 만들기 위함
+  use-default-rulesets: false
+
+  use-rulesets:
+    - python-security
+    - python-best-practices
+    - python-flask
+    - javascript-node-security
+    - javascript-best-practices
+    - javascript-express
+
+  # ignore-rulesets 는 use-rulesets / use-default-rulesets 보다 우선합니다
+  ignore-rulesets:
+    - python-inclusive
+    - javascript-inclusive
+
+  ruleset-configs:
+    python-flask:
+      only-paths:
+        - "app"
+    javascript-node-security:
+      only-paths:
+        - "frontend"
+    javascript-express:
+      only-paths:
+        - "frontend"
+
+  global-config:
+    only-paths:
+      - "app"
+      - "frontend"
+    ignore-paths:
+      - "**/node_modules/**"
+      - "**/__pycache__/**"
+    use-gitignore: true
+    ignore-generated-files: true
+    max-file-size-kb: 200
+
+# 참고 — IaC(Terraform / Dockerfile) 룰은 이 파일로 제어하지 않습니다.
+#   · SAST ruleset 에 terraform-* / docker-* 는 존재하지 않습니다.
+#     (구 `docker-best-practices` ruleset 은 제거되었습니다)
+#   · IaC 검사는 별도 제품인 IaC Security 이며 Datadog-hosted 스캔 전용입니다.
+#     룰 ID 형식: <platform>-<provider>-<rule>
+#       예) terraform-aws-unrestricted-security-group-ingress
+#           terraform-aws-s3-bucket-without-versioning
+#           dockerfile-last-user-is-root
