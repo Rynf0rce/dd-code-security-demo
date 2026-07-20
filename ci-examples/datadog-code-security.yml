@@ -1,0 +1,63 @@
+# Datadog Code Security — CI 스캔 경로 (GitHub Actions)
+#
+# 이 워크플로우는 "소스코드를 외부로 반출할 수 없다"는 요건에 대한 대안 경로입니다.
+# 분석기가 이 러너 안에서 실행되고, Datadog 으로는 findings 메타데이터만 전송됩니다.
+# (rule ID, severity, 파일 경로, 라인 범위, commit SHA, branch, repo URL)
+#
+# ⚠️ 제약
+#   · push 이벤트만 지원합니다. pull_request 트리거를 추가하지 마십시오.
+#   · IaC Security 는 CI 경로로 실행할 수 없습니다 (Datadog-hosted 전용).
+#   · AI-Native SAST / Fix with Bits 는 CI 스캔 결과에 적용되지 않습니다.
+#
+# ⚠️ 사전 준비
+#   1) GitHub repo Settings > Secrets and variables > Actions 에 등록:
+#        DD_API_KEY  — DPN | GS Neotek (US3) org 의 API Key
+#        DD_APP_KEY  — 동일 org 의 Application Key, code_analysis_read 스코프 필수
+#   2) dd_site 는 반드시 us3.datadoghq.com.
+#      미설정 시 기본값이 datadoghq.com(US1) 이라 스캔은 성공하고 결과만 사라집니다.
+
+name: Datadog Code Security
+
+on: [push]
+
+permissions:
+  contents: read
+
+jobs:
+  static-analysis:
+    runs-on: ubuntu-latest
+    name: Datadog Static Analyzer (SAST + Secrets)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Run Datadog Static Analysis
+        uses: DataDog/datadog-static-analyzer-github-action@v3
+        with:
+          dd_api_key: ${{ secrets.DD_API_KEY }}
+          dd_app_key: ${{ secrets.DD_APP_KEY }}
+          dd_site: "us3.datadoghq.com"
+          cpu_count: 2
+          enable_performance_statistics: false
+          static_analysis_enabled: true
+          secrets_enabled: true
+          diff_aware: true
+          debug: "no"
+
+  software-composition-analysis:
+    runs-on: ubuntu-latest
+    name: Datadog SBOM Generation and Upload (SCA)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check imported libraries are secure and compliant
+        uses: DataDog/datadog-sca-github-action@v4
+        with:
+          dd_api_key: ${{ secrets.DD_API_KEY }}
+          dd_app_key: ${{ secrets.DD_APP_KEY }}
+          dd_site: "us3.datadoghq.com"
+          reachability: "true"
+          # lockfile(requirements.txt / package-lock.json)이 있으므로 manifest 파싱 불필요
+          manifest_parsers: "false"
+          exit_on_config_failure: "false"
